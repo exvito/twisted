@@ -538,6 +538,55 @@ class ProcessTests(unittest.TestCase):
         return finished.addCallback(afterProcessEnd)
 
 
+    def test_parentOpenFileRename(self):
+        """
+        Test that parent process can rename an open file after spawning.
+        This reuses process_echoer.py to get a process that blocks on stdin.
+        """
+        filename = self.mktemp()
+        tempFile = open(filename, 'a')
+        finished = defer.Deferred()
+        p = TrivialProcessProtocol(finished)
+        scriptPath = FilePath(__file__).sibling(b"process_echoer.py").path
+        procTrans = reactor.spawnProcess(p, pyExe,
+                                    [pyExe, scriptPath], env=None)
+        newFilename = self.mktemp()
+        try:
+            os.rename(filename, newFilename)
+            exc = None
+        except OSError, e:
+            exc = e
+
+        def afterProcessEnd(ignored):
+            tempFile.close()
+            self.assertIsNone(exc)
+
+        p.transport.closeStdin()
+        return finished.addCallback(afterProcessEnd)
+
+
+    def test_parentStopStartListenTCP(self):
+        """
+        Test parent stop/start listen on bound TCP socket after spawning.
+        This reuses process_echoer.py to get a process that blocks on stdin.
+        """
+        f = protocol.Factory()
+        tcpPort = 10001
+        listenPort = reactor.listenTCP(tcpPort, f)
+        finished = defer.Deferred()
+        p = TrivialProcessProtocol(finished)
+        scriptPath = FilePath(__file__).sibling(b"process_echoer.py").path
+        procTrans = reactor.spawnProcess(p, pyExe,
+                                    [pyExe, scriptPath], env=None)
+
+        d = listenPort.stopListening()
+        d.addCallback(lambda _: listenPort.startListening())
+        d.addCallback(lambda _: listenPort.stopListening())
+        d.addCallback(lambda _: p.transport.closeStdin())
+
+        return finished
+
+
     def test_process(self):
         """
         Test running a process: check its output, it exitCode, some property of
