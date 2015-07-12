@@ -540,7 +540,7 @@ class ProcessTests(unittest.TestCase):
 
     def test_parentOpenFileRename(self):
         """
-        Test that parent process can rename an open file after spawning.
+        Parent can rename a file that was open when spawning.
         This reuses process_echoer.py to get a process that blocks on stdin.
         """
         filename = self.mktemp()
@@ -552,7 +552,7 @@ class ProcessTests(unittest.TestCase):
                                     [pyExe, scriptPath], env=None)
         newFilename = self.mktemp()
         try:
-            # Windows fails renaming open files.
+            # Windows: file needs to be closed for renaming.
             tempFile.close()
             os.rename(filename, newFilename)
             exc = None
@@ -568,10 +568,12 @@ class ProcessTests(unittest.TestCase):
 
     def test_parentStopStartListenTCP(self):
         """
-        Test parent stop/start listen on bound TCP socket after spawning.
+        Parent can stop/start listen socket that was listening when spawning.
         This reuses process_echoer.py to get a process that blocks on stdin.
         """
         f = protocol.Factory()
+        # Request a fixed port.
+        # stop/startListening cycles bind to changing ports if we go dynamic.
         tcpPort = 10001
         listenPort = reactor.listenTCP(tcpPort, f)
         finished = defer.Deferred()

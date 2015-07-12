@@ -1,7 +1,21 @@
-#!/usr/bin/env python
-# ----------------------------------------------------------------------------
-# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-# ----------------------------------------------------------------------------
+# Copyright (c) Twisted Matrix Laboratories.
+# See LICENSE for details.
+
+"""
+Windows handle inheritance functions.
+
+Purpose: disable file/socket handle inheritance by child processes.
+
+References:
+- Sysinternals HOWTO:
+  http://forum.sysinternals.com/howto-enumerate-handles_topic18892.html
+- NtQuerySystemInformation and NtQueryObject APIs:
+  https://msdn.microsoft.com/en-us/library/windows/desktop/ms724509%28v=vs.85%29.aspx
+  https://msdn.microsoft.com/en-us/library/bb432383%28v=vs.85%29.aspx
+- GetHandleInformation and SetHandleInformation APIs:
+  https://msdn.microsoft.com/en-us/library/windows/desktop/ms724329%28v=vs.85%29.aspx
+  https://msdn.microsoft.com/en-us/library/windows/desktop/ms724935%28v=vs.85%29.aspx
+"""
 
 import os
 
@@ -17,13 +31,13 @@ kernel32 = ctypes.windll.kernel32
 
 
 # --------------------------------------------------------------------------
-# A useful constant
+# APIs return this to indicate the output buffer is not large enough.
 
 STATUS_INFO_LENGTH_MISMATCH = 0xc0000004
 
 
 # --------------------------------------------------------------------------
-# Collect system-wide SYSTEM_HANDLEs
+# Collecting system-wide SYSTEM_HANDLEs
 
 class SYSTEM_HANDLE(ctypes.Structure):
 
@@ -37,8 +51,7 @@ class SYSTEM_HANDLE(ctypes.Structure):
     ]
 
 
-def _getSystemHandles(numHandles=1000):
-
+def getSystemHandles(numHandles=1000):
 
     """
     Yields all SYSTEM_HANDLES in the system.
@@ -82,6 +95,7 @@ def _getSystemHandles(numHandles=1000):
             break
 
     count = SystemInformation.HandleCount
+    # Stop at count: SystemInformation.Handles buffer could have been too big.
     for systemHandle in SystemInformation.Handles:
         yield systemHandle
         count -= 1
@@ -92,7 +106,7 @@ def _getSystemHandles(numHandles=1000):
 # --------------------------------------------------------------------------
 # Filter SYSTEM_HANDLEs by process id
 
-def _filterSystemHandlesByPID(systemHandles, pid):
+def filterSystemHandlesByPID(systemHandles, pid):
 
     """
     Yields SYSTEM_HANDLES beloging to process identified by pid.
@@ -124,10 +138,10 @@ class PUBLIC_OBJECT_TYPE_INFORMATION(ctypes.Structure):
     ]
 
 
-def _filterSystemHandlesByTypeName(systemHandles, typeName=u'File'):
+def filterSystemHandlesByTypeName(systemHandles, typeName=u'File'):
 
     """
-    Yields all SYSTEM_HANDLES with TypeName == typeName.
+    Yields all SYSTEM_HANDLES where TypeName == typeName.
     typeName must be a unicode string and defaults to u'File'.
     Based on the NtQueryObject internal Windows API.
     """
@@ -155,7 +169,7 @@ def _filterSystemHandlesByTypeName(systemHandles, typeName=u'File'):
 # --------------------------------------------------------------------------
 # Low level SYSTEM_HANDLEs to upper level HANDLEs
 
-def _handlesFromSystemHandles(systemHandles):
+def handlesFromSystemHandles(systemHandles):
 
     for systemHandle in systemHandles:
         yield systemHandle.Handle
@@ -168,7 +182,7 @@ def _handlesFromSystemHandles(systemHandles):
 HANDLE_FLAG_INHERIT = 0x00000001
 
 
-def _isHandleInheritable(handle):
+def isHandleInheritable(handle):
 
     """
     Returns True if the handle is inheritable, False otherwise.
@@ -176,7 +190,6 @@ def _isHandleInheritable(handle):
     """
 
     kernel32.GetHandleInformation.restype = wintypes.BOOLEAN
-
     HandleInfoFlags = wintypes.DWORD()
 
     status = kernel32.GetHandleInformation(
@@ -188,10 +201,10 @@ def _isHandleInheritable(handle):
     return bool(HandleInfoFlags.value & HANDLE_FLAG_INHERIT)
 
 
-def _clearHandleInheritance(handle):
+def clearHandleInheritance(handle):
 
     """
-    Clears our the handle inheritance flag.
+    Clears the handle inheritance flag.
     Based on the SetHandleInformation Windows API.
     """
 
@@ -201,6 +214,8 @@ def _clearHandleInheritance(handle):
         HANDLE_FLAG_INHERIT,
         0,
     )
+    if status == 0:
+        raise Exception('SetHandleInformation failed')
 
 
 def clearFileHandlesInheritance():
@@ -210,12 +225,12 @@ def clearFileHandlesInheritance():
     Sockets included.
     """
 
-    all = _getSystemHandles()
-    mine = _filterSystemHandlesByPID(all, os.getpid())
-    mineFiles = _filterSystemHandlesByTypeName(mine)
-    for handle in _handlesFromSystemHandles(mineFiles):
-        if _isHandleInheritable(handle):
-            _clearHandleInheritance(handle)
+    all = getSystemHandles()
+    mine = filterSystemHandlesByPID(all, os.getpid())
+    mineFiles = filterSystemHandlesByTypeName(mine)
+    for handle in handlesFromSystemHandles(mineFiles):
+        if isHandleInheritable(handle):
+            clearHandleInheritance(handle)
 
 
 # ----------------------------------------------------------------------------
