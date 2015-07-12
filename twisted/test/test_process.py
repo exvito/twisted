@@ -552,13 +552,14 @@ class ProcessTests(unittest.TestCase):
                                     [pyExe, scriptPath], env=None)
         newFilename = self.mktemp()
         try:
+            # Windows fails renaming open files.
+            tempFile.close()
             os.rename(filename, newFilename)
             exc = None
         except OSError, e:
             exc = e
 
         def afterProcessEnd(ignored):
-            tempFile.close()
             self.assertIsNone(exc)
 
         p.transport.closeStdin()
