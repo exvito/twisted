@@ -32,6 +32,7 @@ from twisted.internet import error
 
 from twisted.internet import _pollingfile
 from twisted.internet._baseprocess import BaseProcess
+from twisted.internet._win32handleinherit import clearFileHandlesInheritance
 
 def debug(msg):
     import sys
@@ -122,6 +123,9 @@ class Process(_pollingfile._PollingTimer, BaseProcess):
         """
         _pollingfile._PollingTimer.__init__(self, reactor)
         BaseProcess.__init__(self, protocol)
+
+        # prevent existing files/sockets from being inherited
+        clearFileHandlesInheritance()
 
         # security attributes for pipes
         sAttrs = win32security.SECURITY_ATTRIBUTES()
