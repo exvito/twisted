@@ -538,6 +538,59 @@ class ProcessTests(unittest.TestCase):
         return finished.addCallback(afterProcessEnd)
 
 
+    def test_parentOpenFileRename(self):
+        """
+        Parent can rename a file that was open when spawning.
+        This reuses process_echoer.py to get a process that blocks on stdin.
+        """
+        filename = self.mktemp()
+        tempFile = open(filename, 'a')
+        finished = defer.Deferred()
+        p = TrivialProcessProtocol(finished)
+        scriptPath = FilePath(__file__).sibling(b"process_echoer.py").path
+        procTrans = reactor.spawnProcess(p, pyExe,
+                                    [pyExe, scriptPath], env=None)
+        newFilename = self.mktemp()
+        try:
+            # Windows: file needs to be closed for renaming.
+            tempFile.close()
+            os.rename(filename, newFilename)
+            exc = None
+        except OSError, e:
+            exc = e
+
+        def afterProcessEnd(ignored):
+            self.assertIsNone(exc)
+
+        p.transport.closeStdin()
+        return finished.addCallback(afterProcessEnd)
+
+
+    def test_parentStopStartListenTCP(self):
+        """
+        Parent can stop/start listen socket that was listening when spawning.
+        This reuses process_echoer.py to get a process that blocks on stdin.
+        """
+        f = protocol.Factory()
+        # Request a fixed port.
+        # stop/startListening cycles bind to changing ports if we go dynamic.
+        tcpPort = 10001
+        listenPort = reactor.listenTCP(tcpPort, f)
+        finished = defer.Deferred()
+        p = TrivialProcessProtocol(finished)
+        scriptPath = FilePath(__file__).sibling(b"process_echoer.py").path
+        procTrans = reactor.spawnProcess(p, pyExe,
+                                    [pyExe, scriptPath], env=None)
+
+        d = listenPort.stopListening()
+        d.addCallback(lambda _: listenPort.startListening())
+        d.addCallback(lambda _: listenPort.stopListening())
+        d.addCallback(lambda _: p.transport.closeStdin())
+        d.addCallback(lambda _: finished)
+
+        return d
+
+
     def test_process(self):
         """
         Test running a process: check its output, it exitCode, some property of
