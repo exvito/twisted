@@ -586,8 +586,9 @@ class ProcessTests(unittest.TestCase):
         d.addCallback(lambda _: listenPort.startListening())
         d.addCallback(lambda _: listenPort.stopListening())
         d.addCallback(lambda _: p.transport.closeStdin())
+        d.addCallback(lambda _: finished)
 
-        return finished
+        return d
 
 
     def test_process(self):
