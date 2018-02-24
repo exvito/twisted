@@ -408,7 +408,7 @@ class _ThreePhaseEvent(object):
             self.removeTrigger_BASE(handle)
 
 
-    def fireEvent(self):
+    def fireEvent(self, *args, **kw):
         """
         Call the triggers added to this event.
         """
@@ -416,19 +416,23 @@ class _ThreePhaseEvent(object):
         self.finishedBefore = []
         beforeResults = []
         while self.before:
-            callable, args, kwargs = self.before.pop(0)
-            self.finishedBefore.append((callable, args, kwargs))
+            callable, base_args, base_kw = self.before.pop(0)
+            combined_args = list(base_args)
+            combined_args.extend(args)
+            combined_kw = base_kw
+            combined_kw.update(kw)
+            self.finishedBefore.append((callable, combined_args, combined_kw))
             try:
-                result = callable(*args, **kwargs)
+                result = callable(*combined_args, **combined_kw)
             except:
                 log.err()
             else:
                 if isinstance(result, Deferred):
                     beforeResults.append(result)
-        DeferredList(beforeResults).addCallback(self._continueFiring)
+        DeferredList(beforeResults).addCallback(self._continueFiring, *args, **kw)
 
 
-    def _continueFiring(self, ignored):
+    def _continueFiring(self, ignored, *args, **kw):
         """
         Call the during and after phase triggers for this event.
         """
@@ -436,9 +440,13 @@ class _ThreePhaseEvent(object):
         self.finishedBefore = []
         for phase in self.during, self.after:
             while phase:
-                callable, args, kwargs = phase.pop(0)
+                callable, base_args, base_kw = phase.pop(0)
+                combined_args = list(base_args)
+                combined_args.extend(args)
+                combined_kw = base_kw
+                combined_kw.update(kw)
                 try:
-                    callable(*args, **kwargs)
+                    callable(*combined_args, **combined_kw)
                 except:
                     log.err()
 
@@ -696,12 +704,12 @@ class ReactorBase(object):
         self.doIteration(delay)
 
 
-    def fireSystemEvent(self, eventType):
+    def fireSystemEvent(self, eventType, *args, **kw):
         """See twisted.internet.interfaces.IReactorCore.fireSystemEvent.
         """
         event = self._eventTriggers.get(eventType)
         if event is not None:
-            event.fireEvent()
+            event.fireEvent(*args, **kw)
 
 
     def addSystemEventTrigger(self, _phase, _eventType, _f, *args, **kw):

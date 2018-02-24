@@ -1449,12 +1449,18 @@ class IReactorCore(Interface):
         particular, you must not call it while the reactor is running.
         """
 
-    def fireSystemEvent(eventType):
+    def fireSystemEvent(eventType, *args, **kw):
         """
         Fire a system-wide event.
 
         System-wide events are things like 'startup', 'shutdown', and
         'persist'.
+
+        @param eventType: a string describing the type of event.
+
+        @param args: extends the args used in addSystemEventTrigger.
+
+        @param kw: extends the kw arguments used in addSystemEventTrigger.
         """
 
     def addSystemEventTrigger(phase, eventType, callable, *args, **kw):

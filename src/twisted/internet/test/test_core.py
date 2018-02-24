@@ -328,6 +328,38 @@ class SystemEventTestsBuilder(ReactorBuilder):
         self.assertEqual(events, ['tested'])
 
 
+    def test_userSystemEvent(self):
+        """
+        L{IReactorCore.addSystemEventTrigger} supports user defined
+        events and L{IReactorCore.fireSystemEvent} provided per event
+        *args and **kw.
+        """
+        class Handler(object):
+            def __init__(self):
+                self.calls = []
+            def __call__(self, *args, **kw):
+                self.calls.append((args, kw))
+
+        eventType = 'user-defined-event'
+        handler = Handler()
+
+        reactor = self.buildReactor()
+        reactor.addSystemEventTrigger('before', eventType, handler, 1, a=1)
+        reactor.addSystemEventTrigger('after', eventType, handler, 1, a=1)
+        reactor.fireSystemEvent(eventType, 2, b=2)
+
+        # ARGH: Firing the event requires it to be re-added.
+        reactor.addSystemEventTrigger('before', eventType, handler, 1, a=1)
+        reactor.addSystemEventTrigger('after', eventType, handler, 1, a=1)
+        reactor.fireSystemEvent(eventType, 3, b=3)
+
+        self.assertEqual(handler.calls, [
+            ((1, 2), {'a': 1, 'b': 2}),
+            ((1, 2), {'a': 1, 'b': 2}),
+            ((1, 3), {'a': 1, 'b': 3}),
+            ((1, 3), {'a': 1, 'b': 3}),
+        ])
+
 
 globals().update(SystemEventTestsBuilder.makeTestCaseClasses())
 globals().update(ObjectModelIntegrationTests.makeTestCaseClasses())

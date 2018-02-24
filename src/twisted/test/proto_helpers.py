@@ -550,7 +550,7 @@ class MemoryReactor(object):
         raise NotImplementedError()
 
 
-    def fireSystemEvent(self, eventType):
+    def fireSystemEvent(self, eventType, *args, **kw):
         """
         Not implemented; raises L{NotImplementedError}.
         """
